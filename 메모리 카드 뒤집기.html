@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>메모리 카드 뒤집기</title>
+<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#e4e8ff; --ink:#1f2352; --muted:#5b6096; --panel:#ffffff;
+  --back-a:#2e3a9e; --back-b:#4a58c9; --front:#ffffff; --accent:#ff5c7a; --ok:#2fbf8f;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#151936; --ink:#eef0ff; --muted:#a3a9e0; --panel:#222750;
+    --back-a:#5a68e0; --back-b:#7d89f5; --front:#f4f5ff; --accent:#ff7b93; --ok:#48d6a6;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#151936; --ink:#eef0ff; --muted:#a3a9e0; --panel:#222750;
+  --back-a:#5a68e0; --back-b:#7d89f5; --front:#f4f5ff; --accent:#ff7b93; --ok:#48d6a6;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Jua","Apple SD Gothic Neo","Malgun Gothic",sans-serif;min-height:100vh;display:flex;justify-content:center}
+main{width:100%;max-width:640px;padding:20px 16px 32px}
+h1{font-size:2rem;margin:4px 0 4px;font-weight:400}
+.sub{margin:0 0 16px;color:var(--muted)}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:16px}
+.levels{display:flex;gap:6px}
+button{font:inherit;color:inherit;cursor:pointer}
+.lv{padding:8px 14px;border-radius:999px;border:2px solid var(--muted);background:transparent}
+.lv[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.stats{display:flex;gap:14px}
+.stat{background:var(--panel);border-radius:14px;padding:6px 14px;text-align:center;min-width:64px}
+.stat b{display:block;font-size:1.3rem;font-weight:400}
+.stat span{font-size:.8rem;color:var(--muted)}
+.board{display:grid;grid-template-columns:repeat(var(--cols),1fr);gap:10px;perspective:900px}
+.card{position:relative;aspect-ratio:3/4;padding:0;border:0;background:none;transform-style:preserve-3d;transition:transform .45s cubic-bezier(.3,.7,.3,1)}
+.card.open,.card.done{transform:rotateY(180deg)}
+.face{position:absolute;inset:0;border-radius:14px;backface-visibility:hidden;-webkit-backface-visibility:hidden;display:flex;align-items:center;justify-content:center}
+.back{background:repeating-linear-gradient(45deg,var(--back-a) 0 8px,var(--back-b) 8px 16px);border:3px solid var(--front)}
+.front{background:var(--front);transform:rotateY(180deg);font-size:clamp(1.6rem,8vw,3rem);border:3px solid transparent}
+.card.done .front{border-color:var(--ok);animation:pop .4s}
+@keyframes pop{50%{scale:1.08}}
+.card:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:14px}
+.card:disabled{cursor:default}
+.actions{display:flex;justify-content:space-between;align-items:center;margin-top:18px;color:var(--muted)}
+.restart{background:var(--accent);color:#fff;border:0;padding:10px 20px;border-radius:999px;font-size:1rem}
+.overlay{position:fixed;inset:0;background:rgba(15,18,50,.55);display:none;align-items:center;justify-content:center;padding:20px}
+.overlay.show{display:flex}
+.modal{background:var(--panel);border-radius:20px;padding:28px 26px;text-align:center;max-width:320px;width:100%}
+.modal h2{font-size:1.7rem;margin:0 0 8px;font-weight:400}
+.modal p{margin:4px 0;color:var(--muted)}
+.modal .restart{margin-top:16px}
+@media (prefers-reduced-motion:reduce){.card{transition:none}.card.done .front{animation:none}}
+</style>
+</head>
+<body>
+<main>
+  <h1>메모리 카드 뒤집기</h1>
+  <p class="sub">같은 그림 두 장을 찾아 모두 맞춰보세요.</p>
+  <div class="bar">
+    <div class="levels" role="group" aria-label="난이도">
+      <button class="lv" data-lv="easy">쉬움</button>
+      <button class="lv" data-lv="normal">보통</button>
+      <button class="lv" data-lv="hard">어려움</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="moves">0</b><span>횟수</span></div>
+      <div class="stat"><b id="time">0</b><span>초</span></div>
+    </div>
+  </div>
+  <div class="board" id="board"></div>
+  <div class="actions">
+    <span id="best">최고 기록: -</span>
+    <button class="restart" id="restart">다시 시작</button>
+  </div>
+</main>
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="mt">
+  <div class="modal">
+    <h2 id="mt">완성!</h2>
+    <p id="mres"></p>
+    <p id="mbest"></p>
+    <button class="restart" id="again">한 판 더</button>
+  </div>
+</div>
+<script>
+const ICONS=["🍎","🍋","🍇","🍓","🐳","🦊","🐙","🌵","🎈","🍄","🎲","🚀"];
+const LEVELS={easy:{cols:4,pairs:6},normal:{cols:4,pairs:8},hard:{cols:6,pairs:12}};
+const $=id=>document.getElementById(id);
+let level="easy",first=null,lock=false,moves=0,matched=0,total=0,timer=null,startAt=0;
+
+function bestKey(){return "memory-best-"+level}
+function getBest(){try{return JSON.parse(localStorage.getItem(bestKey()))}catch(e){return null}}
+function setBest(v){try{localStorage.setItem(bestKey(),JSON.stringify(v))}catch(e){}}
+function showBest(){const b=getBest();$("best").textContent=b?`최고 기록: ${b.moves}회 / ${b.time}초`:"최고 기록: -"}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function stopTimer(){clearInterval(timer);timer=null}
+
+function start(){
+  stopTimer();
+  const {cols,pairs}=LEVELS[level];
+  first=null;lock=false;moves=0;matched=0;total=pairs;
+  $("moves").textContent=0;$("time").textContent=0;
+  $("overlay").classList.remove("show");
+  document.querySelectorAll(".lv").forEach(b=>b.setAttribute("aria-pressed",b.dataset.lv===level));
+  const board=$("board");board.style.setProperty("--cols",cols);board.innerHTML="";
+  shuffle(ICONS.slice(0,pairs).flatMap(i=>[i,i])).forEach(icon=>{
+    const c=document.createElement("button");
+    c.className="card";c.dataset.icon=icon;c.setAttribute("aria-label","뒤집히지 않은 카드");
+    c.innerHTML=`<span class="face back"></span><span class="face front">${icon}</span>`;
+    c.addEventListener("click",()=>flip(c));
+    board.appendChild(c);
+  });
+  showBest();
+}
+
+function flip(c){
+  if(lock||c.classList.contains("open")||c.classList.contains("done"))return;
+  if(!timer){startAt=Date.now();timer=setInterval(()=>{$("time").textContent=Math.floor((Date.now()-startAt)/1000)},250)}
+  c.classList.add("open");c.setAttribute("aria-label","카드 "+c.dataset.icon);
+  if(!first){first=c;return}
+  moves++;$("moves").textContent=moves;
+  const a=first;first=null;
+  if(a.dataset.icon===c.dataset.icon){
+    [a,c].forEach(x=>{x.classList.replace("open","done");x.disabled=true});
+    if(++matched===total)win();
+  }else{
+    lock=true;
+    setTimeout(()=>{
+      [a,c].forEach(x=>{x.classList.remove("open");x.setAttribute("aria-label","뒤집히지 않은 카드")});
+      lock=false;
+    },800);
+  }
+}
+
+function win(){
+  stopTimer();
+  const t=Math.floor((Date.now()-startAt)/1000);
+  $("time").textContent=t;
+  const b=getBest();
+  const better=!b||moves<b.moves||(moves===b.moves&&t<b.time);
+  if(better)setBest({moves,time:t});
+  $("mres").textContent=`${moves}번 만에 ${t}초 걸렸어요.`;
+  $("mbest").textContent=better?"새로운 최고 기록이에요!":"";
+  showBest();
+  setTimeout(()=>{$("overlay").classList.add("show");$("again").focus()},600);
+}
+
+document.querySelectorAll(".lv").forEach(b=>b.addEventListener("click",()=>{level=b.dataset.lv;start()}));
+$("restart").addEventListener("click",start);
+$("again").addEventListener("click",start);
+start();
+</script>
+</body>
+</html>
